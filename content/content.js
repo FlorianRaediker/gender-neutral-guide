@@ -202,7 +202,7 @@ function genderWord(wordId, article, preserve, numberCase) {
         
         let genderedWord;
         if (nc[0] === "s" && feminineWord.endsWith("in")) {
-            genderedWord = feminineWord.substring(0, feminineWord.length-3) + "*in";
+            genderedWord = feminineWord.substring(0, feminineWord.length-2) + "*in";
         } else if (nc[0] === "p" && feminineWord.endsWith("innen")) {
             genderedWord = feminineWord.substring(0, feminineWord.length-5) + "*innen";
         } else {
@@ -226,7 +226,7 @@ function genderWord(wordId, article, preserve, numberCase) {
 
         if (Array.isArray(articleStr)) {
             articleStr = articleStr.join("*") + " ";
-        } else {
+        } else if (articleStr) {
             articleStr += " ";
         }
         
@@ -305,7 +305,8 @@ function checkConstructConstraint(construct, word, properties) {
                     (!globalConstraints.case || globalConstraints.case.includes(nc[1])))) {
                 return "finished";
             }
-            return false;
+            // matching finished, but might be false-positive
+            return "finished-possibly-false";
         }
         
 
@@ -328,19 +329,16 @@ function checkConstructConstraint(construct, word, properties) {
 }
 
 
-/**
- * 
- * @param {String} text 
- * @returns 
- */
- function replaceText(text) {
+function replaceText(text) {
     //console.log("text", text);
     const matchingsToReplace = [];
     let currentMatchings = [];
     for (const match of text.matchAll(REGEX_WORD)) {
         const word = match[0];
 
-        function addFinishedMatching(matching) {
+        function addFinishedMatching(matching, checkResult) {
+            // store matchings by start index with their end index (=match.index + word.length) so that later, the longest matching can be chosen
+            matching.checkResult = checkResult;
             if (matchingsToReplace.length === 0 || matching.startIndex !== matchingsToReplace[matchingsToReplace.length-1][0]) {
                 matchingsToReplace.push([matching.startIndex, [[match.index + word.length, matching]]]);
             } else {
@@ -354,12 +352,15 @@ function checkConstructConstraint(construct, word, properties) {
             const checkResult = checkConstructConstraint(matching.construct, word, matching.properties)
             if (checkResult) {
                 //console.log(checkResult === "finished" ? "match finished" : "match", matching.constructId, word, matching.properties);
-                if (checkResult === "finished") {
-                    // store matchings by start index with their end index (=match.index + word.length) so that later, the longest matching can be chosen
-                    addFinishedMatching(matching);
-                    matchingFinished = true;
-                    currentMatchings = [];
-                    break;  // there shouldn't be multiple matchings with the same start and end
+                if (checkResult === "finished" || checkResult === "finished-possibly-false") {
+                    addFinishedMatching(matching, checkResult);
+                    if (checkResult === "finished") {
+                        matchingFinished = true;
+                        currentMatchings = [];
+                        break;  // there shouldn't be multiple valid matchings with the same start and end
+                    } else {
+                        currentMatchings.splice(i, 1);
+                    }
                 }
             } else {
                 //console.log("no longer match", matching.constructId, word, matching.properties);
@@ -390,8 +391,8 @@ function checkConstructConstraint(construct, word, properties) {
                         properties,
                         startIndex: match.index
                     };
-                    if (checkResult === "finished") {
-                        addFinishedMatching(matching);
+                    if (checkResult === "finished" || checkResult === "finished-possibly-false") {
+                        addFinishedMatching(matching, checkResult);
                     } else {
                         currentMatchings.push(matching);
                     }
@@ -410,12 +411,12 @@ function checkConstructConstraint(construct, word, properties) {
         let maxEndIndex = 0;
         let maxMatching = null;
         for (let [endIndex, matching] of matchings) {
-            if (endIndex > maxEndIndex) {
+            if (endIndex > maxEndIndex && (matching.checkResult === "finished" || !maxMatching)) {  // prefer finished over finished-possibly-false, even if the latter is longer
                 maxEndIndex = endIndex;
                 maxMatching = matching;
             }
         }
-        
+
         const replaceRules = maxMatching.construct[0].replace || {};
         const numberCase = [];
         for (let nc of maxMatching.properties.numberCase) {
@@ -435,20 +436,33 @@ function checkConstructConstraint(construct, word, properties) {
             genderedWord = genderedWords[0];
         } else {
             // there are multiple possibilities in numberCase which unfortunately produce different gendered words
-            console.warn("can't be sure how to gender", WORD_DECLENSIONS[maxMatching.properties.wordId][0][0], numberCase, genderedWords);
+            if (maxMatching.checkResult === "finished") console.warn("can't be sure how to gender", WORD_DECLENSIONS[maxMatching.properties.wordId][0][0], numberCase, genderedWords);
             genderedWord = genderedWords.join(" / ");
         }
-        res += (
-            text.substring(lastEndIndex, maxMatching.startIndex) + 
-            '<mark title="' + text.substring(maxMatching.startIndex, maxEndIndex) + 
-            '" style="background-color:#ffff0080!important" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
-            genderedWord + "</mark>");
+
+        if (maxMatching.checkResult === "finished") {
+            res += (
+                text.substring(lastEndIndex, maxMatching.startIndex) + 
+                '<mark title="' + text.substring(maxMatching.startIndex, maxEndIndex) + 
+                '" style="background-color:#ffff0080!important" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
+                genderedWord + "</mark>"
+            );
+            counter++;
+        } else {
+            console.assert(maxMatching.checkResult === "finished-possibly-false");
+            res += (
+                text.substring(lastEndIndex, maxMatching.startIndex) + 
+                '<mark title="' + genderedWord + 
+                '" style="background-color:#c1840150!important" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
+                text.substring(maxMatching.startIndex, maxEndIndex) + "</mark>"
+            );
+        }
+        
         lastEndIndex = maxEndIndex;
-        counter++;
     }
     res += text.substring(lastEndIndex);
 
-    return [counter, res];
+    return [matchingsToReplace.length > 0, counter, res];
 }
 
 
@@ -468,8 +482,8 @@ function iterNodes(node) {
             if (node.nodeType === Node.ELEMENT_NODE) {
                 nextNodes.push(...node.childNodes);
             } else if (node.nodeType === Node.TEXT_NODE) {
-                let [c, text] = replaceText(node.textContent);
-                if (c !== 0) {
+                let [didReplace, c, text] = replaceText(node.textContent);
+                if (didReplace) {
                     counter += c;
                     const newNode = document.createElement("div");
                     newNode.innerHTML = text;
