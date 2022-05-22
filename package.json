@@ -9,10 +9,10 @@
   "author": "Florian Rädiker",
   "devDependencies": {
     "fs-extra": "^10.0.0",
-    "glob": "^7.2.0",
-    "node-fetch": "^2.6.6",
-    "web-ext": "^6.7.0",
-    "webextension-polyfill": "^0.8.0"
+    "glob": "^8.0.3",
+    "node-fetch": "^3.2.4",
+    "web-ext": "^5.1.0",
+    "webextension-polyfill": "^0.9.0"
   },
   "scripts": {
     "start": "web-ext run --firefox-profile ~/firefox-development-profile --profile-create-if-missing --keep-profile-changes",
