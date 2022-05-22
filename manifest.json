@@ -18,8 +18,7 @@
       "matches": [ "<all_urls>" ],
       "js": [
         "vendor/webextension-polyfill/browser-polyfill.min.js",
-        "content/word_declensions.js",
-        "content/word_types.js",
+        "content/wordlist.js",
         "content/content.js"
       ],
       "run_at": "document_idle"

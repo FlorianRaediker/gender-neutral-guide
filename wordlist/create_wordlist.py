@@ -41,6 +41,9 @@ def declension2str(declension):
     return " ".join(("|".join(forms) if forms else "-") for forms in declension)
 
 
+
+# WORD DECLENSIONS
+
 word_declensions = []
 
 for word, feminine_words in wordlist:
@@ -92,13 +95,9 @@ for word, feminine_words in wordlist:
 def simplify_declension(declension):
     return [(x[0][0] if x[0]==x[1]==x[2] else [y[0] for y in x]) for x in declension]
 
-with open("./../content/word_declensions.js", "w") as f:
-    f.write("/* auto-generated file, do not modify! */\nconst WORD_DECLENSIONS = [\n")
-    for word, masculine_declension, feminine_declension in word_declensions:
-        f.write(json.dumps([simplify_declension(masculine_declension), simplify_declension(feminine_declension)], ensure_ascii=False, separators=(",",":")))
-        f.write(",\n")
-    f.write("]\n")
 
+
+# WORD TYPES
 
 word_types = {}
 
@@ -119,8 +118,18 @@ for id_, (word, masculine_declension, feminine_declension) in enumerate(word_dec
     add_word_types(id_, masculine_declension, "m")
     add_word_types(id_, feminine_declension, "f")
 
-with open("./../content/word_types.js", "w") as f:
-    f.write("/* auto-generated file, do not modify! */\nconst WORD_TYPES = {\n")
+
+
+with open("./../content/wordlist.js", "w") as f:
+    f.write("""/* AUTO-GENERATED FILE, DO NOT MODIFY! */
+
+const WORD_DECLENSIONS = [
+""")
+    for word, masculine_declension, feminine_declension in word_declensions:
+        f.write(json.dumps([simplify_declension(masculine_declension), simplify_declension(feminine_declension)], ensure_ascii=False, separators=(",",":")))
+        f.write(",\n")
+
+    f.write("]\n\n\nconst WORD_TYPES = {\n")
     for word, types in word_types.items():
         f.write(json.dumps(word, ensure_ascii=False))
         f.write(":")
