@@ -57,14 +57,17 @@ const CONSTRUCTS = [
         }
     ],
 
-    /*// (die) Schüler*in(nen)
+    // (die) Schüler:in(nen)
     [
         {
+            type: "article",
+            optional: true
+        },
+        {
             type: "word",
-            gender: "*",
-            article: "optional"
+            gender: "*"
         }
-    ],*/
+    ],
 
     // (die) Schülerinnen und/oder/bzw. (die) Schüler => die Schüler*innen
     [
@@ -257,6 +260,22 @@ function checkConstructConstraint(construct, word, properties) {
         }
         return false;
     case "word":
+        // remove any gendered suffix since words in WORD_TYPES are not gendered
+        let isGendered = false;
+        if (word.length > 2 && word.endsWith("In")) {
+            isGendered = true;
+            word = word.substring(0, word.length-2) + "in";
+        } else if (word.length > 3 && (word.endsWith("_in") || word.endsWith(":in"))) {
+            isGendered = true;
+            word = word.substring(0, word.length-3) + "in";
+        } else if (word.length > 5 && word.endsWith("Innen")) {
+            isGendered = true;
+            word = word.substring(0, word.length-5) + "innen";
+        } else if (word.length > 6 && (word.endsWith("_innen") || word.endsWith(":innen"))) {
+            isGendered = true;
+            word = word.substring(0, word.length-6) + "innen";
+        }
+
         const wordId_types = WORD_TYPES[word];
         if (!wordId_types) {
             return false;
@@ -270,6 +289,9 @@ function checkConstructConstraint(construct, word, properties) {
         properties.wordId = wordId;
 
         // check types
+        if (isGendered) {
+            types = types.map(type => type[0] + "*" + type[2] + type[3]);
+        }
         types = types.filter(type => (!constraints.gender || constraints.gender.includes(type[1])));
         if (properties.articleTypes) {
             types = types.filter(type => properties.articleTypes.includes(type));
