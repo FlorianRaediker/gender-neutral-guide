@@ -74,8 +74,16 @@ for word, feminine_words in wordlist:
     if not feminine_declensions:
         print("Skipping, feminine declension is identical:", word["word"])
         continue
+
     # merge feminine_declensions into one
-    feminine_declension = [[list({form for d in feminine_declensions for form in d[i][j]}) for j in range(3)] for i in range(8)]
+    def merge_forms(forms):
+        res = []
+        for form in forms:
+            if form not in res:
+                res.append(form)
+        return res
+    feminine_declension = [[merge_forms(form for d in feminine_declensions for form in d[i][j]) for j in range(3)] for i in range(8)]
+
     if word["word"] in word_declensions:
         print("Word is present multiple times:", word["word"])
     word_declensions.append((word["word"], masculine_declension, feminine_declension))
@@ -110,11 +118,6 @@ def add_word_types(word_id, declension, gender):
 for id_, (word, masculine_declension, feminine_declension) in enumerate(word_declensions):
     add_word_types(id_, masculine_declension, "m")
     add_word_types(id_, feminine_declension, "f")
-    if (feminine_form := feminine_declension[0][0][0]).endswith("in"):
-        feminine_form = feminine_form[:-2]
-        #add_word_types(id_, [[[feminine_form+"*in"]]*3]*4 + [[[feminine_form+"*innen"]]*3]*4, "*")
-    else:
-        print("Don't know how to gender:", feminine_form)
 
 with open("./../content/word_types.js", "w") as f:
     f.write("/* auto-generated file, do not modify! */\nconst WORD_TYPES = {\n")
