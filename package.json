@@ -1,0 +1,21 @@
+{
+  "name": "gender-neutral-guide",
+  "version": "1.0.0",
+  "description": "Browser extension that provides guidance on gender-neutral language",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FlorianRaediker/gender-neutral-browser-ext"
+  },
+  "author": "Florian Rädiker",
+  "devDependencies": {
+    "fs-extra": "^10.0.0",
+    "glob": "^7.2.0",
+    "node-fetch": "^2.6.6",
+    "web-ext": "^6.7.0",
+    "webextension-polyfill": "^0.8.0"
+  },
+  "scripts": {
+    "start": "web-ext run --firefox-profile ~/firefox-development-profile --profile-create-if-missing --keep-profile-changes",
+    "build-vendor": "node tools/build-vendor"
+  }
+}

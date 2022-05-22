@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "Gender Neutral Guide",
+  "description": "Provides guidance on gender-neutral language",
+  "version": "1.0.0",
+
+  "browser_action": { },
+
+  "background": {
+    "scripts": [
+      "vendor/webextension-polyfill/browser-polyfill.min.js",
+      "background.js"
+    ]
+  },
+
+  "content_scripts": [
+    {
+      "matches": [ "<all_urls>" ],
+      "js": [
+        "vendor/webextension-polyfill/browser-polyfill.min.js",
+        "content/word_declensions.js",
+        "content/word_types.js",
+        "content/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
