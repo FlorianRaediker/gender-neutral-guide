@@ -1,4 +1,4 @@
-## webextension-polyfill v0.8.0
+## webextension-polyfill v0.9.0
 
 Files copied from NPM (node_modules):
 * browser-polyfill.min.js: dist/*
