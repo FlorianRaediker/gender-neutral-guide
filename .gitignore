@@ -1,6 +1,7 @@
 *.gitignore
 !.gitignore
 wordlist/kaikki.org-dictionary-German-by-pos-noun.json
+gender-neutral-guide.zip
 
 # Logs
 logs

@@ -8,6 +8,7 @@
   },
   "author": "Florian Rädiker",
   "devDependencies": {
+    "archiver": "^4.0.2",
     "fs-extra": "^9.0.0",
     "glob": "^7.2.0",
     "node-fetch": "^2.6.7",
@@ -17,6 +18,7 @@
   "scripts": {
     "start": "web-ext run --firefox-profile ~/firefox-development-profile --profile-create-if-missing --keep-profile-changes",
     "start-flatpak-chromium": "web-ext run --target chromium --chromium-binary ~/start-flatpak-ungoogled-chromium.sh --chromium-profile ~/chromium-development-profile --profile-create-if-missing --keep-profile-changes",
+    "zip": "node tools/zip",
     "build-vendor": "node tools/build-vendor"
   }
 }
