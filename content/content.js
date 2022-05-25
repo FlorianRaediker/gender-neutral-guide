@@ -463,20 +463,21 @@ function replaceText(text) {
         }
 
         if (maxMatching.checkResult === "finished") {
+            // TODO: Add rainbow flag as background option
             res += (
                 text.substring(lastEndIndex, maxMatching.startIndex) + 
-                '<mark title="' + text.substring(maxMatching.startIndex, maxEndIndex) + 
-                '" style="background-color:#ffff0080!important" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
-                genderedWord + "</mark>"
+                '<span title="' + text.substring(maxMatching.startIndex, maxEndIndex) + 
+                '" style="background-color:#ffff0080!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
+                genderedWord + "</span>"
             );
             counter++;
         } else {
             console.assert(maxMatching.checkResult === "finished-possibly-false");
             res += (
                 text.substring(lastEndIndex, maxMatching.startIndex) + 
-                '<mark title="' + genderedWord + 
-                '" style="background-color:#c1840150!important" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
-                text.substring(maxMatching.startIndex, maxEndIndex) + "</mark>"
+                '<span title="' + genderedWord + 
+                '" style="background-color:#c1840150!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
+                text.substring(maxMatching.startIndex, maxEndIndex) + "</span>"
             );
         }
         
@@ -515,8 +516,8 @@ function iterNodes(node, callback) {
             if (node.tagName && SKIP_TAGS.includes(node.tagName.toLowerCase())) continue;
             if (callback(node)) {
                 nextNodes.push(...node.childNodes);
-                }
             }
+        }
         nodes = nextNodes;
     }
 }
@@ -560,7 +561,7 @@ const mutationObserver = new MutationObserver((mutationRecords, observer) => {
             console.log("changed text node", mutation.target);
             if (mutation.target.nodeType === Node.TEXT_NODE) {
                 replaceTextInNode(mutation.target);
-browser.runtime.sendMessage({setBadge: counter});
+                browser.runtime.sendMessage({setBadge: counter});
             }
             break;
         }
