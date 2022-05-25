@@ -490,36 +490,79 @@ function replaceText(text) {
 
 let counter = 0;
 
+
+function replaceTextInNode(textNode) {
+    // TODO: Use Text.splitNode() to improve performance?
+    let [didReplace, c, text] = replaceText(textNode.textContent);
+    if (didReplace) {
+        counter += c;
+        const newNode = document.createElement("div");
+        newNode.innerHTML = text;
+        newNode.childNodes.forEach(node => node.__is_gendered = true);
+        newNode.childNodes[0].__gendered_count = c;  // TODO: distribute count properly
+        textNode.replaceWith(...newNode.childNodes);
+    }
+}
+
+
 const SKIP_TAGS = ["style", "script", "svg"];
 
-/**
- * @param {Node} node 
- */
-function iterNodes(node) {
+function iterNodes(node, callback) {
     let nodes = [node];
     while (nodes.length > 0) {
         let nextNodes = [];
         for (let node of nodes) {
             if (node.tagName && SKIP_TAGS.includes(node.tagName.toLowerCase())) continue;
-            if (node.nodeType === Node.ELEMENT_NODE) {
+            if (callback(node)) {
                 nextNodes.push(...node.childNodes);
-            } else if (node.nodeType === Node.TEXT_NODE) {
-                let [didReplace, c, text] = replaceText(node.textContent);
-                if (didReplace) {
-                    counter += c;
-                    const newNode = document.createElement("div");
-                    newNode.innerHTML = text;
-                    node.replaceWith(...newNode.childNodes);
                 }
             }
-        }
         nodes = nextNodes;
     }
 }
 
+function iterReplaceCallback(node) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+        return true;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+        replaceTextInNode(node);
+    }
+}
+
+
+// TODO: Check lang tag
+
 
 console.time("gender-neutral-guide:gender");
-iterNodes(document.body);
+iterNodes(document.body, iterReplaceCallback);
 console.timeEnd("gender-neutral-guide:gender");
-
 browser.runtime.sendMessage({setBadge: counter});
+
+
+const mutationObserver = new MutationObserver((mutationRecords, observer) => {
+    for (const mutation of mutationRecords) {
+        switch (mutation.type) {
+        case "childList":
+            mutation.addedNodes.forEach(node => {if (!node.__is_gendered) iterNodes(node, iterReplaceCallback)});
+            mutation.removedNodes.forEach(node => iterNodes(node, n => {
+                if (n.__gendered_count) {
+                    counter -= n.__gendered_count || 0; 
+                    n.__gendered_count = 0;
+                }
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    return true;
+                }
+            }));
+            browser.runtime.sendMessage({setBadge: counter});
+            break;
+        case "characterData":
+            console.log("changed text node", mutation.target);
+            if (mutation.target.nodeType === Node.TEXT_NODE) {
+                replaceTextInNode(mutation.target);
+browser.runtime.sendMessage({setBadge: counter});
+            }
+            break;
+        }
+    }
+}).observe(document.body, {subtree: true, childList: true, characterData: true});
