@@ -12,6 +12,9 @@ a word is described by the following string, as seen in word_types.js
 */
 
 
+const debug_log = () => {};  // console.log
+
+
 const ARTICLES = {
     "der": ["wmsn", "wmpg", "wfsg", "wfsd", "wfpg"],
     "des": ["wmsg"],
@@ -39,7 +42,7 @@ const ARTICLE_DECLENSIONS = {
 };
 
 
-const REGEX_WORD = /(bzw\.|[a-zäöüß\-*_:()]+|\/|\d([\d.]*\d)?)/gi;
+const REGEX_WORD = /(bzw\.|[a-zäöüß\-*_:()]+|\/|\d+)/gi;
 
 
 const CONSTRUCTS = [
@@ -167,7 +170,7 @@ const CONSTRUCTS = [
 
     // 50 Schüler => 50 Schüler*innen
     [
-        {replace: {number: "p"}},
+        {number: "p", replace: {number: "p"}},
         {
             type: "number",
             preserve: true
@@ -181,18 +184,18 @@ const CONSTRUCTS = [
 
 
 
-function genderWord(wordId, article, preserve, numberCase) {
-    function getDeclinedWord(wordId, genderIndex, caseIndex, articleIndex) {
-        let word = WORD_DECLENSIONS[wordId][genderIndex][caseIndex];
+function genderWord(nounId, article, preserve, cases) {
+    function getDeclinedNoun(wordId, genderIndex, caseIndex, articleIndex) {
+        let word = NOUN_DECLENSIONS[wordId][genderIndex][caseIndex];
         if (Array.isArray(word)) {
             return word[articleIndex];
         }
         return word;
     }
 
-    console.assert(numberCase.length > 0);
+    console.assert(cases.length > 0);
     let genderedWords = [];
-    for (const nc of numberCase) {
+    for (const nc of cases) {
         let caseIndex = (nc[0] === "s" ? 0 : 4) + "ngda".indexOf(nc[1]);
         let articleIndex = "swx".indexOf(article);  // strong, weak, or mixed;
 
@@ -201,7 +204,7 @@ function genderWord(wordId, article, preserve, numberCase) {
             articleStr = ARTICLE_DECLENSIONS[article][2][caseIndex];
         }
 
-        let feminineWord = getDeclinedWord(wordId, 1, caseIndex, articleIndex);
+        let feminineWord = getDeclinedNoun(nounId, 1, caseIndex, articleIndex);
         
         let genderedWord;
         if (nc[0] === "s" && feminineWord.endsWith("in")) {
@@ -209,7 +212,7 @@ function genderWord(wordId, article, preserve, numberCase) {
         } else if (nc[0] === "p" && feminineWord.endsWith("innen")) {
             genderedWord = feminineWord.substring(0, feminineWord.length-5) + "*innen";
         } else {
-            let masculineWord = getDeclinedWord(wordId, 0, caseIndex, articleIndex);
+            let masculineWord = getDeclinedNoun(nounId, 0, caseIndex, articleIndex);
             if (feminineWord === masculineWord) {
                 if (!articleStr || !Array.isArray(articleStr)) {
                     // no need to gender, it's already gender-neutral
@@ -241,7 +244,9 @@ function genderWord(wordId, article, preserve, numberCase) {
     return genderedWords;
 }
 
-
+/**
+ * @returns 0: no match, 1: matching not finished yet, 2: matching finished and is certainly not false-positive, 3: matching finished and might be false-positive
+ */
 function checkConstructConstraint(construct, word, properties) {
     console.assert(properties.position<construct.length);
     const constraints = construct[properties.position];
@@ -249,19 +254,19 @@ function checkConstructConstraint(construct, word, properties) {
 
     switch (constraints.type) {
     case "article":
-        let articleTypes = ARTICLES[word];
-        if (articleTypes) {
-            properties.articleTypes = articleTypes;
-            properties.article = articleTypes[0][0];  // "w" (weak) or "x" (mixed)
-            return true;
+        let articleForms = ARTICLES[word];
+        if (articleForms) {
+            properties.articleForms = articleForms;
+            properties.article = articleForms[0][0];  // "w" (weak) or "x" (mixed)
+            return 1;
         }
         if (constraints.optional) {
             return checkConstructConstraint(construct, word, properties);
         }
-        return false;
+        return 0;
     case "word":
-        // remove any gendered suffix since words in WORD_TYPES are not gendered
-        let isGendered = false;
+        // remove any gendered suffix since words in NOUN_FORMS are not gendered
+        let isGendered;
         if (word.length > 2 && word.endsWith("In")) {
             isGendered = true;
             word = word.substring(0, word.length-2) + "in";
@@ -274,239 +279,254 @@ function checkConstructConstraint(construct, word, properties) {
         } else if (word.length > 6 && (word.endsWith("_innen") || word.endsWith(":innen"))) {
             isGendered = true;
             word = word.substring(0, word.length-6) + "innen";
-        }
-
-        const wordId_types = WORD_TYPES[word];
-        if (!wordId_types) {
-            return false;
-        }
-        let [wordId, types] = wordId_types;
-
-        // check or set wordId
-        if (properties.wordId && properties.wordId !== wordId) {
-            return false;
-        }
-        properties.wordId = wordId;
-
-        // check types
-        if (isGendered) {
-            types = types.map(type => type[0] + "*" + type[2] + type[3]);
-        }
-        types = types.filter(type => (!constraints.gender || constraints.gender.includes(type[1])));
-        if (properties.articleTypes) {
-            types = types.filter(type => properties.articleTypes.includes(type));
-            properties.articleTypes = null;
-        }
-        if (types.length === 0) {
-            return false;
-        }
-
-        // check global number and case property
-        if (properties.numberCase) {
-            properties.numberCase = properties.numberCase.filter(numberCase => types.some(type => numberCase[0] === type[2] && numberCase[1] === type[3]));
-            if (properties.numberCase.length === 0) {
-                return false;
-            }
         } else {
-            properties.numberCase = [];
-            for (const type of types) {
-                const nc = type[2] + type[3];
-                if (!properties.numberCase.includes(nc)) {
-                    properties.numberCase.push(nc);
+            isGendered = false;
+        }
+
+
+        const nounId_forms = NOUN_FORMS[word];
+        if (!nounId_forms) {
+            return 0;
+        }
+        let [nounId, forms] = nounId_forms;
+
+
+        // check or set nounId
+        if (properties.nounId && properties.nounId !== nounId) {
+            return 0;
+        }
+        properties.nounId = nounId;
+
+
+        // check forms
+        if (isGendered) {
+            forms = forms.map(form => form[0] + "*" + form[2] + form[3]);
+        }
+        if (constraints.gender) {
+            forms = forms.filter(form => constraints.gender.includes(form[1]));
+        }
+        if (properties.articleForms) {
+            forms = forms.filter(form => properties.articleForms.includes(form));
+            properties.articleForms = null;
+        }
+        if (forms.length === 0) {
+            return 0;
+        }
+
+
+        // set and check cases (number+case)
+        const globalConstraints = construct[0];
+
+        const filterNumberCase = nc => forms.some(type => nc[0] === type[2] && nc[1] === type[3]);
+        if (properties.possibleCases) {
+            properties.possibleCases = properties.possibleCases.filter(filterNumberCase);
+            properties.otherCases = properties.otherCases.filter(filterNumberCase);
+        } else {
+            properties.possibleCases = [];
+            properties.otherCases = [];
+            for (const form of forms) {
+                const nc = form[2] + form[3];
+                // check if nc fulfills global constraints
+                if ((!globalConstraints.number || globalConstraints.number.includes(nc[0])) && 
+                    (!globalConstraints.case || globalConstraints.case.includes(nc[1]))) {
+                    if (!properties.possibleCases.includes(nc)) {
+                        properties.possibleCases.push(nc);
+                    }
+                } else {
+                    if (!properties.otherCases.includes(nc)) {
+                        properties.otherCases.push(nc);
+                    }
                 }
             }
         }
+        if (properties.possibleCases.length === 0) {
+            return 0;
+        }
 
-        const globalConstraints = construct[0];
 
         if (properties.position === construct.length) {
             // matching finished
-            // check global constraints
-            if (properties.numberCase.every(nc => 
-                    (!globalConstraints.number || globalConstraints.number.includes(nc[0])) &&
-                    (!globalConstraints.case || globalConstraints.case.includes(nc[1])))) {
-                return "finished";
-            }
-            // matching finished, but might be false-positive
-            return "finished-possibly-false";
-        }
-        
-
-        // check if global constraints on number and case can still be fulfilled
-        if (!properties.numberCase.some(nc => 
-                (!globalConstraints.number || globalConstraints.number.includes(nc[0])) && 
-                (!globalConstraints.case || globalConstraints.case.includes(nc[1])))) {
-            return false;
+            return properties.otherCases.length === 0 ? 2 : 3;
         }
 
-        return true;
+        return 1;
     case "literal":
-        return constraints.literal.includes(word);
+        return constraints.literal.includes(word) ? 1 : 0;
     case "number":
         if (constraints.preserve) {
             properties.preserve += word + " ";
         }
-        return /\d([\d.]*\d)?/.test(word);
+        return /\d+/.test(word) ? 1 : 0;
     }
 }
 
 
-function replaceText(text) {
-    //console.log("text", text);
-    const matchingsToReplace = [];
-    let currentMatchings = [];
-    for (const match of text.matchAll(REGEX_WORD)) {
-        const word = match[0];
+function searchGenderableWords(text) {
+    const matches = [];
+    let currentMatches = [];
+    let lastIndex = 0;
+    for (const wordMatch of text.matchAll(REGEX_WORD)) {
+        const word = wordMatch[0];
 
-        function addFinishedMatching(matching, checkResult) {
-            // store matchings by start index with their end index (=match.index + word.length) so that later, the longest matching can be chosen
-            matching.checkResult = checkResult;
-            if (matchingsToReplace.length === 0 || matching.startIndex !== matchingsToReplace[matchingsToReplace.length-1][0]) {
-                matchingsToReplace.push([matching.startIndex, [[match.index + word.length, matching]]]);
-            } else {
-                matchingsToReplace[matchingsToReplace.length-1][1].push([match.index + word.length, matching]);
+        debug_log("word", word);
+
+        //if (text.substring(lastIndex, word.index).match(/^\s*$/) == null) {
+            // space between words contains non-white space characters
+            //currentMatchings = [];
+        //}
+        lastIndex = wordMatch.index + word.length;
+
+        function addCompletedMatch(match, checkResult) {
+            // from all matches with the same startIndex, save the one with the highest endIndex that preferably isn't false-positive
+            match = {
+                startIndex: match.startIndex,
+                endIndex: lastIndex,
+                replaceRules: match.construct[0].replace || {},
+                nounId: match.properties.nounId,
+                possibleCases: match.properties.possibleCases,
+                otherCases: match.properties.otherCases,
+                article: match.properties.article,
+                preserve: match.properties.preserve,
+                possiblyFalsePositive: checkResult === 3
             }
+            if (matches.length === 0 || match.startIndex !== matches[matches.length-1].startIndex) {
+                matches.push(match);
+            } else {
+                console.assert(matches[matches.length-1].endIndex < match.endIndex || matches[matches.length-1].possiblyFalsePositive);
+                matches[matches.length-1] = match;
+            }
+            return !match.possiblyFalsePositive;
         }
 
         let matchingFinished = false;
-        for (let i=0; i<currentMatchings.length; i++) {
-            const matching = currentMatchings[i];
-            const checkResult = checkConstructConstraint(matching.construct, word, matching.properties)
-            if (checkResult) {
-                //console.log(checkResult === "finished" ? "match finished" : "match", matching.constructId, word, matching.properties);
-                if (checkResult === "finished" || checkResult === "finished-possibly-false") {
-                    addFinishedMatching(matching, checkResult);
-                    if (checkResult === "finished") {
-                        matchingFinished = true;
-                        currentMatchings = [];
-                        break;  // there shouldn't be multiple valid matchings with the same start and end
-                    } else {
-                        currentMatchings.splice(i, 1);
-                    }
-                }
-            } else {
-                //console.log("no longer match", matching.constructId, word, matching.properties);
-                currentMatchings.splice(i, 1);
+        for (let i=0; i<currentMatches.length; i++) {
+            const match = currentMatches[i];
+            const checkResult = checkConstructConstraint(match.construct, word, match.properties);
+            if (checkResult === 0) {
+                // no match
+                currentMatches.splice(i, 1);
                 i--;
+            } else if (checkResult === 2 || checkResult === 3) {
+                // matching finished
+                if (addCompletedMatch(match, checkResult)) {
+                    // match is not false-positive, further matches shouldn't be checked
+                    currentMatches = [];
+                    matchingFinished = true;
+                    debug_log("match finished", matches[matches.length-1]);
+                    break;
+                }
+                // match might be false-positive, so continue with other matches that might be non-false-positive
+                currentMatches.splice(i, 1);
+                i--;
+                matchingFinished = true;
+                debug_log("match possibly false-positive", matches[matches.length-1]);
+            } else {
+                debug_log("continued match", match);
             }
         }
 
-        if (currentMatchings.length === 0 && !matchingFinished) {
-            let hasMatch = false;
-            for (let constructId=0; constructId<CONSTRUCTS.length; constructId++) {
-                const construct = CONSTRUCTS[constructId];
-                let properties = {
-                    position: 1,
-                    wordId: null,
-                    numberCase: null,
-                    articleTypes: null,
-                    article: "s",  // strong (no article); possibly replaced by checkConstructConstraint with "w" or "x"
-                    preserve: ""
+        if (currentMatches.length === 0 && !matchingFinished) {
+            for (const construct of CONSTRUCTS) {
+                let properties = {  // properties of a match; those may be changed during matching by checkConstructConstraint
+                    position: 1,  // number of current word, index in construct
+                    nounId: null, // ID of the noun that is used in this construct
+                    possibleCases: null, // cases (number+case) that the construct could have which are allowed by the construct
+                    otherCases: null,    // cases (number+case) that the construct could have which are not allowed by the construct
+                                         // (thus, a non-empty array indicates that the match is possibly a false-positive)
+                    articleForms: null, // used internally by checkConstructConstraint 
+                    article: "s", // type of article that is used in the construct: by default strong (no article); possibly replaced by checkConstructConstraint with "w" (weak; bestimmter Artikel) or "x" (mixed; unbestimmter Artikel)
+                    preserve: ""  // text 
                 };
                 const checkResult = checkConstructConstraint(construct, word, properties)
-                if (checkResult) {
-                    hasMatch = true;
-                    //console.log(checkResult === "finished" ? "match new and finished" : "match new", constructId, word, properties);
-                    let matching = {
-                        constructId,
+                if (checkResult !== 0) {
+                    let match = {
                         construct,
                         properties,
-                        startIndex: match.index
+                        startIndex: wordMatch.index
                     };
-                    if (checkResult === "finished" || checkResult === "finished-possibly-false") {
-                        addFinishedMatching(matching, checkResult);
+                    if (checkResult === 2 || checkResult === 3) {
+                        addCompletedMatch(match, checkResult);
+                        debug_log("new and completed match", matches[matches.length-1]);
                     } else {
-                        currentMatchings.push(matching);
+                        currentMatches.push(match);
+                        debug_log("new match", match);
                     }
                 }
             }
-            if (!hasMatch) {
-                //console.log("no match", word);
-            }
         }
     }
 
-    let res = "";
-    let lastEndIndex = 0;
-    let counter = 0;
-    for (let [startIndex, matchings] of matchingsToReplace) {
-        let maxEndIndex = 0;
-        let maxMatching = null;
-        for (let [endIndex, matching] of matchings) {
-            if (endIndex > maxEndIndex && (matching.checkResult === "finished" || !maxMatching)) {  // prefer finished over finished-possibly-false, even if the latter is longer
-                maxEndIndex = endIndex;
-                maxMatching = matching;
-            }
-        }
-
-        const replaceRules = maxMatching.construct[0].replace || {};
-        const numberCase = [];
-        for (let nc of maxMatching.properties.numberCase) {
-            if (replaceRules.number) nc = replaceRules.number + nc[1];
-            if (replaceRules.case)   nc = nc[0] + replaceRules.case;
-            if (!numberCase.includes(nc)) {
-                numberCase.push(nc);
-            }
-        }
-        const genderedWords = genderWord(maxMatching.properties.wordId, maxMatching.properties.article, maxMatching.properties.preserve, numberCase);
-        let genderedWord;
-        if (genderedWords.length === 0) {
-            console.log("no need to gender", WORD_DECLENSIONS[maxMatching.properties.wordId][0][0], maxMatching.properties.article, numberCase);
-            continue;
-        }
-        if (genderedWords.length === 1) {
-            genderedWord = genderedWords[0];
-        } else {
-            // there are multiple possibilities in numberCase which unfortunately produce different gendered words
-            if (maxMatching.checkResult === "finished") console.warn("can't be sure how to gender", WORD_DECLENSIONS[maxMatching.properties.wordId][0][0], numberCase, genderedWords);
-            genderedWord = genderedWords.join(" / ");
-        }
-
-        if (maxMatching.checkResult === "finished") {
-            // TODO: Add rainbow flag as background option
-            res += (
-                text.substring(lastEndIndex, maxMatching.startIndex) + 
-                '<span title="' + text.substring(maxMatching.startIndex, maxEndIndex) + 
-                '" style="background-color:#ffff0080!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
-                genderedWord + "</span>"
-            );
-            counter++;
-        } else {
-            console.assert(maxMatching.checkResult === "finished-possibly-false");
-            res += (
-                text.substring(lastEndIndex, maxMatching.startIndex) + 
-                '<span title="' + genderedWord + 
-                '" style="background-color:#c1840150!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;" data-gendered-number-case="' + maxMatching.properties.numberCase.join(",") + '">' +
-                text.substring(maxMatching.startIndex, maxEndIndex) + "</span>"
-            );
-        }
-        
-        lastEndIndex = maxEndIndex;
-    }
-    res += text.substring(lastEndIndex);
-
-    return [matchingsToReplace.length > 0, counter, res];
+    return matches;
 }
 
 
 let counter = 0;
 
 
-function replaceTextInNode(textNode) {
-    // TODO: Use Text.splitNode() to improve performance?
-    let [didReplace, c, text] = replaceText(textNode.textContent);
-    if (didReplace) {
-        counter += c;
-        const newNode = document.createElement("div");
-        newNode.innerHTML = text;
-        newNode.childNodes.forEach(node => node.__is_gendered = true);
-        newNode.childNodes[0].__gendered_count = c;  // TODO: distribute count properly
-        textNode.replaceWith(...newNode.childNodes);
+/**
+ * @param {Text} textNode
+ */
+function genderTextNode(textNode) {
+    /** @type Array.<{startIndex: number, endIndex: number, replaceRules: {number: string, case: string}, nounId: number, possibleCases: string[], otherCases: string[], article: string, preserve: string, possiblyFalsePositive: boolean}> */
+    let matches = searchGenderableWords(textNode.textContent);
+    textNode.__is_gendered = true;
+    for (let i = matches.length-1; i >= 0; i--) {
+        const match = matches[i];
+        debug_log("match", textNode.textContent, match);
+        const nodeToReplace = textNode.splitText(match.startIndex);  // splitText() returns the right part
+        nodeToReplace.__is_gendered = true;
+        const rightNode = nodeToReplace.splitText(match.endIndex-match.startIndex);
+        rightNode.__is_gendered = true;
+
+        function mapCases(cases) {
+            const newCases = [];
+            for (let nc of cases) {
+                if (match.replaceRules.number) nc = match.replaceRules.number + nc[1];
+                if (match.replaceRules.case)   nc = nc[0] + match.replaceRules.case;
+                if (!newCases.includes(nc)) {
+                    newCases.push(nc);
+                }
+            }
+            return newCases;
+        }
+        const possibleCases = mapCases(match.possibleCases);
+        const otherCases = mapCases(match.otherCases);  // TODO
+        
+        const genderedWords = genderWord(match.nounId, match.article, match.preserve, possibleCases);
+        let genderedWord;
+        if (genderedWords.length === 0) {
+            debug_log("no need to gender", NOUN_DECLENSIONS[match.nounId][0][0], match);
+            continue;
+        }
+        if (genderedWords.length === 1) {
+            genderedWord = genderedWords[0];
+        } else {
+            // there are multiple possibilities in numberCase which unfortunately produce different gendered words
+            if (!match.possiblyFalsePositive) console.warn("can't be sure how to gender", NOUN_DECLENSIONS[match.nounId][0][0], match, genderedWords);
+            genderedWord = genderedWords.join(" / ");
+        }
+
+        const genderedNode = document.createElement("span");
+        // TODO: Add rainbow flag as background option
+        genderedNode.style = "background-color:" + (match.possiblyFalsePositive ? "#c1840150" : "#ffff0080") + "!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;";
+        genderedNode.dataset.gngMatch = JSON.stringify(match);
+        genderedNode.__is_gendered = true;
+
+        if (!match.possiblyFalsePositive) {
+            genderedNode.textContent = genderedWord;
+            genderedNode.title = nodeToReplace.textContent;
+            genderedNode.dataset.gngGenderedCount = 1;
+            counter++;
+        } else {
+            genderedNode.textContent = nodeToReplace.textContent;
+            genderedNode.title = genderedWord;
+        }
+        nodeToReplace.replaceWith(genderedNode);
     }
 }
 
 
-const SKIP_TAGS = ["style", "script", "svg"];
+const SKIP_TAGS = ["style", "script", "svg", "noscript"];
 
 function iterNodes(node, callback) {
     let nodes = [node];
@@ -524,10 +544,14 @@ function iterNodes(node, callback) {
 
 function iterReplaceCallback(node) {
     if (node.nodeType === Node.ELEMENT_NODE) {
-        return true;
+        if (!node.__is_gendered && !node.dataset.gngMatch) { // in case the script is injected multiple times
+            return true;
+        }
+        if (node.dataset.gngGenderedCount) counter += parseInt(node.dataset.gngGenderedCount);
+        return false;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-        replaceTextInNode(node);
+        genderTextNode(node);
     }
 }
 
@@ -541,11 +565,14 @@ console.timeEnd("gender-neutral-guide:gender");
 browser.runtime.sendMessage({setBadge: counter});
 
 
-const mutationObserver = new MutationObserver((mutationRecords, observer) => {
+// TODO: Option to enable/disable MutationObserver
+/*const mutationObserver = new MutationObserver((mutationRecords, observer) => {
     for (const mutation of mutationRecords) {
         switch (mutation.type) {
         case "childList":
-            mutation.addedNodes.forEach(node => {if (!node.__is_gendered) iterNodes(node, iterReplaceCallback)});
+            if (mutation.addedNodes.length) debug_log("added nodes", mutation.addedNodes);
+            if (mutation.removedNodes.length) debug_log("removed nodes", mutation.removedNodes);
+            mutation.addedNodes.forEach(node => {if (!node.__is_gendered && !node.dataset.gngMatch) iterNodes(node, iterReplaceCallback)});
             mutation.removedNodes.forEach(node => iterNodes(node, n => {
                 if (n.__gendered_count) {
                     counter -= n.__gendered_count || 0; 
@@ -558,12 +585,12 @@ const mutationObserver = new MutationObserver((mutationRecords, observer) => {
             browser.runtime.sendMessage({setBadge: counter});
             break;
         case "characterData":
-            console.log("changed text node", mutation.target);
+            debug_log("changed text node", mutation.target);
             if (mutation.target.nodeType === Node.TEXT_NODE) {
-                replaceTextInNode(mutation.target);
+                genderTextNode(mutation.target);
                 browser.runtime.sendMessage({setBadge: counter});
             }
             break;
         }
     }
-}).observe(document.body, {subtree: true, childList: true, characterData: true});
+}).observe(document.body, {subtree: true, childList: true, characterData: true});*/

@@ -6,6 +6,10 @@ with open("filtered_words.json", "r") as f:
     wordlist = json.load(f)
 
 
+EXCLUDE_WORDS = {"Mensch", "Mann", "Flüchtling", "Fisch"}  # words which have a masculine and a feminine form in Wiktionary but shouldn't be gendered
+wordlist = [w for w in wordlist if w[0]["word"] not in EXCLUDE_WORDS]
+
+
 DECLENSION_TAGS = [{number, case} for number in ("singular", "plural") for case in ("nominative", "genitive", "dative", "accusative")]
 FILTER_ARTICLES = [{"der", "ein", "die", "eine"}, {"des", "eines", "der", "einer"}, {"dem", "einem", "der", "einer"}, {"den", "einen", "die", "eine"}, {"die", "keine"}, {"der", "keiner"}, {"den", "keinen"}, {"die", "keine"}]
 
@@ -123,13 +127,13 @@ for id_, (word, masculine_declension, feminine_declension) in enumerate(word_dec
 with open("./../content/wordlist.js", "w") as f:
     f.write("""/* AUTO-GENERATED FILE, DO NOT MODIFY! */
 
-const WORD_DECLENSIONS = [
+const NOUN_DECLENSIONS = [
 """)
     for word, masculine_declension, feminine_declension in word_declensions:
         f.write(json.dumps([simplify_declension(masculine_declension), simplify_declension(feminine_declension)], ensure_ascii=False, separators=(",",":")))
         f.write(",\n")
 
-    f.write("]\n\n\nconst WORD_TYPES = {\n")
+    f.write("]\n\n\nconst NOUN_FORMS = {\n")
     for word, types in word_types.items():
         f.write(json.dumps(word, ensure_ascii=False))
         f.write(":")
