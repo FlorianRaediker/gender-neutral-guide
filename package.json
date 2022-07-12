@@ -13,7 +13,7 @@
     "fs-extra": "^9.0.0",
     "glob": "^7.2.0",
     "node-fetch": "^2.6.7",
-    "web-ext": "^6.8.0",
+    "web-ext": "^7.1.1",
     "webextension-polyfill": "^0.9.0"
   },
   "scripts": {
