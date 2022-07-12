@@ -14,7 +14,7 @@ DECLENSION_TAGS = [{number, case} for number in ("singular", "plural") for case 
 FILTER_ARTICLES = [{"der", "ein", "die", "eine"}, {"des", "eines", "der", "einer"}, {"dem", "einem", "der", "einer"}, {"den", "einen", "die", "eine"}, {"die", "keine"}, {"der", "keiner"}, {"den", "keinen"}, {"die", "keine"}]
 
 def get_declension(word):
-    res = [[[] for _ in range(3)] for _ in range(8)]  # [strong, mixed, weak]
+    res = [[[], [], []] for _ in range(8)]  # [strong, mixed, weak]
     for form in word.get("forms", []):
         tags = form["tags"]
         for i, test_tags in enumerate(DECLENSION_TAGS):
@@ -96,9 +96,14 @@ for word, feminine_words in wordlist:
     word_declensions.append((word["word"], masculine_declension, feminine_declension))
 
 
-def simplify_declension(declension):
-    return [(x[0][0] if x[0]==x[1]==x[2] else [y[0] for y in x]) for x in declension]
-
+def compress_declensions(*declensions):
+    i = 0
+    for characters in zip(*(word[0] for declension in declensions for words in declension for word in words)):
+        if any(characters[0] != c for c in characters[1:]):
+            break
+        i += 1
+    # starting at i, the word's characters differ
+    return [declensions[0][0][0][0][:i]] + [[(x[0][0][i:] if x[0]==x[1]==x[2] else [y[0][i:] for y in x]) for x in declension] for declension in declensions]
 
 
 # WORD TYPES
@@ -130,7 +135,7 @@ with open("./../content/wordlist.js", "w") as f:
 const NOUN_DECLENSIONS = [
 """)
     for word, masculine_declension, feminine_declension in word_declensions:
-        f.write(json.dumps([simplify_declension(masculine_declension), simplify_declension(feminine_declension)], ensure_ascii=False, separators=(",",":")))
+        f.write(json.dumps(compress_declensions(masculine_declension, feminine_declension), ensure_ascii=False, separators=(",",":")))
         f.write(",\n")
 
     f.write("]\n\n\nconst NOUN_FORMS = {\n")

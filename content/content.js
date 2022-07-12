@@ -186,11 +186,12 @@ const CONSTRUCTS = [
 
 function genderWord(nounId, article, preserve, cases) {
     function getDeclinedNoun(wordId, genderIndex, caseIndex, articleIndex) {
-        let word = NOUN_DECLENSIONS[wordId][genderIndex][caseIndex];
+        const wordStem = NOUN_DECLENSIONS[wordId][0];
+        const word = NOUN_DECLENSIONS[wordId][genderIndex+1][caseIndex];
         if (Array.isArray(word)) {
-            return word[articleIndex];
+            return wordStem+word[articleIndex];
         }
-        return word;
+        return wordStem+word;
     }
 
     console.assert(cases.length > 0);
