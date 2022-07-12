@@ -507,11 +507,11 @@ function genderTextNode(textNode) {
         }
 
         const genderedNode = document.createElement("span");
+        genderedNode.classList.add("__gng-gendered__");
         // TODO: Add rainbow flag as background option
         genderedNode.style = "background-color:" + (match.possiblyFalsePositive ? "#c1840150" : "#ffff0080") + "!important;border-radius:0.3em!important;padding-left:0.15em!important;padding-right:0.15em!important;";
         genderedNode.dataset.gngMatch = JSON.stringify(match);
         genderedNode.__is_gendered = true;
-
         if (!match.possiblyFalsePositive) {
             genderedNode.textContent = genderedWord;
             genderedNode.title = nodeToReplace.textContent;
@@ -521,7 +521,12 @@ function genderTextNode(textNode) {
             genderedNode.textContent = nodeToReplace.textContent;
             genderedNode.title = genderedWord;
         }
-        nodeToReplace.replaceWith(genderedNode);
+
+        const ungenderedNode = document.createElement("span");
+        ungenderedNode.classList.add("__gng-ungendered__");
+        ungenderedNode.textContent = nodeToReplace.textContent;
+
+        nodeToReplace.replaceWith(genderedNode, ungenderedNode);
     }
 }
 
@@ -559,12 +564,6 @@ function iterReplaceCallback(node) {
 // TODO: Check lang tag
 
 
-console.time("gender-neutral-guide:gender");
-iterNodes(document.body, iterReplaceCallback);
-console.timeEnd("gender-neutral-guide:gender");
-browser.runtime.sendMessage({setBadge: counter});
-
-
 // TODO: Option to enable/disable MutationObserver
 /*const mutationObserver = new MutationObserver((mutationRecords, observer) => {
     for (const mutation of mutationRecords) {
@@ -594,3 +593,29 @@ browser.runtime.sendMessage({setBadge: counter});
         }
     }
 }).observe(document.body, {subtree: true, childList: true, characterData: true});*/
+
+
+let isGendered = false;
+
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log("cs received message", message);
+    switch (message.type) {
+        case "bg-enable-cs":
+            console.log("gng enable");
+            document.body.classList.add("__gng-gendered__");
+            if (!isGendered) {
+                console.time("gender-neutral-guide:gender");
+                iterNodes(document.body, iterReplaceCallback);
+                console.timeEnd("gender-neutral-guide:gender");
+                browser.runtime.sendMessage({type: "cs-count", count: counter});
+                isGendered = true;
+            }
+            break;
+        case "bg-disable-cs":
+            console.log("gng disable");
+            document.body.classList.remove("__gng-gendered__");
+            break;
+    }
+});
+
+browser.runtime.sendMessage({type: "cs-injected"});

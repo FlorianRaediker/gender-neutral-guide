@@ -1,0 +1,9 @@
+body span.__gng-gendered__,
+body.__gng-gendered__ span.__gng-ungendered__ {
+    display: none !important;
+}
+
+body span.__gng-ungendered__,
+body.__gng-gendered__ span.__gng-gendered__ {
+    display: inline !important;
+}

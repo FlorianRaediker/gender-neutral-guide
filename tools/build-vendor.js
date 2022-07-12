@@ -25,7 +25,10 @@ const KEEP_DIRECTORIES = null;
 
 const files = {
   "webextension-polyfill": [
-    "dist/browser-polyfill.min.js"
+    "dist/browser-polyfill.min.js",
+  ],
+  "bootstrap": [
+    "dist/css/bootstrap.min.css"
   ]
 };
 
