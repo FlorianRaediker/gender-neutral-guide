@@ -185,58 +185,71 @@ const CONSTRUCTS = [
 
 
 function genderWord(nounId, article, preserve, cases) {
-    function getDeclinedNoun(wordId, genderIndex, caseIndex, articleIndex) {
-        const wordStem = NOUN_DECLENSIONS[wordId][0];
-        const word = NOUN_DECLENSIONS[wordId][genderIndex+1][caseIndex];
+    function getDeclinedNoun(nounId, genderIndex, caseIndex, articleIndex) {
+        const wordStem = NOUN_DECLENSIONS[nounId][0];
+        const word = NOUN_DECLENSIONS[nounId][genderIndex+1][caseIndex];
+        if (word == null) return null;
         if (Array.isArray(word)) {
             return wordStem+word[articleIndex];
         }
         return wordStem+word;
+    }
+    function getGenderNeutralNoun(nounId, caseIndex, articleIndex) {
+        if (NOUN_DECLENSIONS[nounId].length >= 4) {
+            // words with gender-neutral forms have an additional element
+            return getDeclinedNoun(nounId, 2, caseIndex, articleIndex);
+        }
+        return null;
     }
 
     console.assert(cases.length > 0);
     let genderedWords = [];
     for (const nc of cases) {
         let caseIndex = (nc[0] === "s" ? 0 : 4) + "ngda".indexOf(nc[1]);
-        let articleIndex = "swx".indexOf(article);  // strong, weak, or mixed;
+        let articleIndex = "swx".indexOf(article);  // strong, weak, or mixed
 
         let articleStr = "";
         if (article === "w" || article === "x") {
             articleStr = ARTICLE_DECLENSIONS[article][2][caseIndex];
         }
 
-        let feminineWord = getDeclinedNoun(nounId, 1, caseIndex, articleIndex);
-        
         let genderedWord;
-        if (nc[0] === "s" && feminineWord.endsWith("in")) {
-            genderedWord = feminineWord.substring(0, feminineWord.length-2) + "*in";
-        } else if (nc[0] === "p" && feminineWord.endsWith("innen")) {
-            genderedWord = feminineWord.substring(0, feminineWord.length-5) + "*innen";
+        const genderNeutralWord = getGenderNeutralNoun(nounId, caseIndex, articleIndex);
+        if (genderNeutralWord != null) {
+            genderedWord = genderNeutralWord;
         } else {
-            let masculineWord = getDeclinedNoun(nounId, 0, caseIndex, articleIndex);
-            if (feminineWord === masculineWord) {
-                if (!articleStr || !Array.isArray(articleStr)) {
-                    // no need to gender, it's already gender-neutral
-                    continue;
-                }
-                genderedWord = feminineWord;
+            let feminineWord = getDeclinedNoun(nounId, 1, caseIndex, articleIndex);
+
+            if (nc[0] === "s" && feminineWord.endsWith("in")) {
+                genderedWord = feminineWord.substring(0, feminineWord.length-2) + "*in";
+            } else if (nc[0] === "p" && feminineWord.endsWith("innen")) {
+                genderedWord = feminineWord.substring(0, feminineWord.length-5) + "*innen";
             } else {
-                if (feminineWord.startsWith(masculineWord)) {
-                    genderedWord = masculineWord + "*" + feminineWord.substring(masculineWord.length);
-                } else if (masculineWord.startsWith(feminineWord)) {
-                    genderedWord = feminineWord + "*" + masculineWord.substring(feminineWord.length);
+                let masculineWord = getDeclinedNoun(nounId, 0, caseIndex, articleIndex);
+                if (feminineWord === masculineWord) {
+                    if (!articleStr || !Array.isArray(articleStr)) {
+                        // no need to gender, it's already gender-neutral
+                        continue;
+                    }
+                    genderedWord = feminineWord;
                 } else {
-                    genderedWord = masculineWord + "*" + feminineWord;
+                    if (feminineWord.startsWith(masculineWord)) {
+                        genderedWord = masculineWord + "*" + feminineWord.substring(masculineWord.length);
+                    } else if (masculineWord.startsWith(feminineWord)) {
+                        genderedWord = feminineWord + "*" + masculineWord.substring(feminineWord.length);
+                    } else {
+                        genderedWord = masculineWord + "*" + feminineWord;  // TODO: make order customizable
+                    }
                 }
+            }
+
+            if (Array.isArray(articleStr)) {
+                articleStr = articleStr.join("*") + " ";
+            } else if (articleStr) {
+                articleStr += " ";
             }
         }
 
-        if (Array.isArray(articleStr)) {
-            articleStr = articleStr.join("*") + " ";
-        } else if (articleStr) {
-            articleStr += " ";
-        }
-        
         let gendered = articleStr + preserve + genderedWord;
         if (!genderedWords.includes(gendered)) {
             genderedWords.push(gendered);
